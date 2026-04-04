@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.31"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.16.0"
+    }
   }
 
   backend "s3" {}
