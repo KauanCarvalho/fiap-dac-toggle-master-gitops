@@ -38,14 +38,14 @@ module "redis_sg" {
   vpc_id      = module.vpc.vpc_id
 }
 
-resource "aws_security_group_rule" "redis_inbound_from_eks" {
-  type                     = "ingress"
-  from_port                = 6379
-  to_port                  = 6379
-  protocol                 = "tcp"
-  security_group_id        = module.redis_sg.sg_id
-  source_security_group_id = module.eks_sg.sg_id
-  description              = "Allow traffic from EKS pods"
+resource "aws_security_group_rule" "redis_inbound_from_vpc" {
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  security_group_id = module.redis_sg.sg_id
+  cidr_blocks       = ["10.0.0.0/16"]
+  description       = "Allow traffic from VPC (EKS nodes)"
 }
 
 module "redis" {
@@ -68,14 +68,14 @@ module "rds_sg" {
   vpc_id      = module.vpc.vpc_id
 }
 
-resource "aws_security_group_rule" "rds_inbound_from_eks" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  security_group_id        = module.rds_sg.sg_id
-  source_security_group_id = module.eks_sg.sg_id
-  description              = "Allow traffic to RDS from EKS pods"
+resource "aws_security_group_rule" "rds_inbound_from_vpc" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = module.rds_sg.sg_id
+  cidr_blocks       = ["10.0.0.0/16"]
+  description       = "Allow traffic to RDS from VPC (EKS nodes)"
 }
 
 module "rds_auth" {
