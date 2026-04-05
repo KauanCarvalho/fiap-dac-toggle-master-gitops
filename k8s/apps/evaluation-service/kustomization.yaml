@@ -5,3 +5,4 @@ resources:
   - external-secret.yaml
   - service.yaml
   - deployment.yaml
+  - hpa.yaml
