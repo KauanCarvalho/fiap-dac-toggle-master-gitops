@@ -64,8 +64,25 @@ Para interagir com o cluster e os repositórios via CLI, certifique-se de que o 
 
 ### Passo 4: Publicação das Imagens e Atualização dos Manifestos
 
+O ciclo de vida das imagens e do deploy é gerenciado de forma automatizada, permitindo que a imagem seja alterada via GitOps.
+
+#### 4.1. Automação via Pipelines (Recomendado)
+
+O fluxo principal de deploy utiliza pipelines (GitHub Actions) nos repositórios dos microsserviços. Esse processo funciona de forma integrada:
+
+1. **Compilar** o código e realizar o **Build** da imagem Docker.
+2. Realizar os scans de segurança e fazer o **Push** para o Amazon ECR.
+3. **Trigger de GitOps**: A pipeline do microserviço utiliza um **GitHub App** para realizar um commit automático **neste repositório de GitOps**, alterando a tag da imagem no respectivo manifesto em `k8s/apps/`.
+4. **Deploy Automático**: O **ArgoCD** detecta o commit realizado pelo GitHub App e sincroniza o estado do cluster com a nova versão da imagem.
+
+Este fluxo garante que a imagem em produção seja sempre rastreável, testada e implantada de forma declarativa.
+
+#### 4.2. Execução Manual (Local)
+
+Caso necessite realizar o processo manualmente em seu terminal local, utilize os scripts abaixo:
+
 1. **Publicar Imagens no ECR**:
-Execute o script abaixo em seu terminal para realizar o build e push de todos os serviços para os repositórios criados via Terraform:
+Execute o script abaixo para realizar o build e push dos serviços para o ECR criados via Terraform:
 
 ```bash
 REGION="us-east-1"
@@ -87,16 +104,9 @@ done
 
 2. **Sincronização de Tags (GitOps Sync)**:
 
-Atualize as imagens nos manifestos de aplicação para os 5 serviços utilizando o utilitário `sed` ou editando os arquivos manualmente. O comando abaixo usa os templates como base para gerar o manifesto final em `k8s/apps/`:
+Atualize as imagens nos manifestos nos diretórios `k8s/apps/`. O ArgoCD detectará o novo commit e iniciará o deploy no cluster.
 
-```bash
-# Exemplo para o serviço de Auth (Obrigatório repetir para os 5 serviços)
-sed "s|\$IMAGE_URI|YOUR_ECR_IMAGE_URL_HERE|g" k8s/templates/auth-service/deployment.tmpl.yaml > k8s/apps/auth-service/deployment.yaml
-```
-
-**Nota**: O uso do `sed` é meramente ilustrativo para agilizar o processo; você pode optar por copiar o conteúdo do template e colar a URL da imagem manualmente no arquivo de destino.
-
-**Importante**: Após gerar os manifestos atualizados, é obrigatório realizar o `git commit` e `git push` dessas mudanças. O ArgoCD monitora o repositório remoto e só iniciará a sincronização para o cluster após detectar o novo commit na ramificação principal.
+**Nota**: O uso de pipelines é o método preferencial para manter a integridade e rastreabilidade do processo GitOps.
 
 ### Passo 5: Preparação do Cluster Kubernetes
 
@@ -135,7 +145,59 @@ No painel do ArgoCD, realize a sincronização do aplicativo `core-infra` antes 
 
 ---
 
-## 5. Validação e Evidência de Operação
+## 5. Banco de Dados e Migrações
+
+Certos microserviços (como Auth, Flag e Targeting) dependem da execução de queries iniciais ou migrations para o correto funcionamento das tabelas e procedimentos no PostgreSQL. Você pode encontrar os scripts SQL necessários no repositório de origem das aplicações: [Scripts SQL](https://github.com/KauanCarvalho/fiap-dac-toggle-master/tree/main/local/services).
+
+### 5.1. Executando Queries Manualmente via Pod Temporário
+
+Como o RDS está em uma sub-rede privada e o acesso direto via console pode estar restrito no AWS Academy, a forma recomendada de executar os scripts é subindo um Pod temporário dentro do cluster que tenha o cliente `psql` instalado.
+
+1. **Obtenha as Credenciais**:
+   As credenciais (Host, User, Password) podem ser visualizadas no **Output do Terraform** após o provisionamento ou através do **AWS Secrets Manager** no console da AWS.
+
+2. **Crie o Pod de Ferramentas**:
+   Execute o comando abaixo para subir um pod com o cliente do Postgres:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: net-test
+  namespace: default
+spec:
+  containers:
+  - name: net-test
+    image: postgres:16-alpine
+    command: ["sleep", "3600"]
+  restartPolicy: Never
+EOF
+```
+
+3. **Acesse o Pod e Execute o psql**:
+   Utilize as senhas configuradas nos **GitHub Secrets** (`DB_PASSWORD_AUTH`, `DB_PASSWORD_FLAG`, etc.) para realizar o login:
+```bash
+kubectl exec -it net-test -- psql -h <RDS_ENDPOINT> -U <USER> -d <DB_NAME>
+```
+
+### ⚠️ WARNING: O Problema das Migrações Manuais
+
+No fluxo ideal de uma arquitetura de microsserviços, as alterações de banco de dados devem ser tratadas como **migrations versionadas** que executam automaticamente a cada inicialização da aplicação (ex: usando tools de **Migrators** como Flyway, Liquibase ou ferramentas nativas da linguagem).
+
+**Por que não foi feito de forma automatizada aqui?**
+
+Neste projeto específico, os scripts de banco não estavam previamente versionados como código de migração dentro dos repositórios originais dos serviços. Por esse motivo, a execução manual é necessária para a configuração inicial do ambiente.
+
+**Por que migrações automatizadas são a melhor prática?**
+
+- **Sincronia com o Código**: Garante que o schema do banco acompanhe exatamente a versão da imagem que está sendo implantada.
+- **Evita Erros de Performance**: Execuções manuais e ad-hoc podem causar `drop` acidental de Procedures, Functions ou Views essenciais, resultando em erros de runtime e degradação de performance.
+- **Governança e GitOps**: Em um ecossistema GitOps de elite, o banco de dados deve ser tão "autogerenciavel" e declarativo quanto os proprios containers no Kubernetes.
+
+---
+
+## 6. Validação e Evidência de Operação
 
 Após a sincronização, os serviços podem ser validados através dos endereços de Health Check fornecidos pelo Ingress Load Balancer:
 
@@ -150,6 +212,6 @@ Após a sincronização, os serviços podem ser validados através dos endereço
 
 ---
 
-## 6. Considerações Finais
+## 7. Considerações Finais
 
 Toda a infraestrutura descrita foi projetada sob o princípio de imutabilidade. Conflitos de versão foram eliminados através da centralização no repositório de GitOps, e a segurança foi reforçada com a injeção dinâmica de segredos via AWS Secrets Manager, atendendo integralmente aos requisitos da Fase 3 do Tech Challenge.
