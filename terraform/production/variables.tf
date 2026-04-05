@@ -26,3 +26,33 @@ variable "db_password_targeting" {
   sensitive   = true
   description = "Password for the Targeting DB"
 }
+
+variable "aws_access_key" {
+  description = "AWS Access Key for Lab credentials"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS Secret Key for Lab credentials"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_session_token" {
+  description = "AWS Session Token for Lab credentials"
+  type        = string
+  sensitive   = true
+}
+
+variable "eval_api_key" {
+  description = "API Key for Evaluation service"
+  type        = string
+  sensitive   = true
+}
+
+variable "auth_master_key" {
+  description = "Master Key for Auth service"
+  type        = string
+  sensitive   = true
+}

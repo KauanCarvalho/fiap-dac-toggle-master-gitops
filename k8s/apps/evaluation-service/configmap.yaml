@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: evaluation-service-config
+  namespace: evaluation-service
+data:
+  PORT: "8004"
+  FLAG_SERVICE_URL: "http://flag-service.flag-service.svc.cluster.local"
+  TARGETING_SERVICE_URL: "http://targeting-service.targeting-service.svc.cluster.local"
+  AWS_REGION: "us-east-1"
