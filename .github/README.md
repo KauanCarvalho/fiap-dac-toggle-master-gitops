@@ -77,40 +77,14 @@ O fluxo principal de deploy utiliza pipelines (GitHub Actions) nos repositórios
 
 Este fluxo garante que a imagem em produção seja sempre rastreável, testada e implantada de forma declarativa.
 
-#### 4.2. Execução Manual (Local)
+*Como fazer*:
 
-Caso necessite realizar o processo manualmente em seu terminal local, utilize os scripts abaixo:
-
-1. **Publicar Imagens no ECR**:
-Execute o script abaixo para realizar o build e push dos serviços para o ECR criados via Terraform:
-
-```bash
-REGION="us-east-1"
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
-GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || openssl rand -hex 4 | cut -c1-7)
-
-aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-
-SERVICES=("auth-service" "flag-service" "targeting-service" "evaluation-service" "analytics-service")
-
-for SERVICE in "${SERVICES[@]}"; do
-    REPO_NAME="togglemaster-${SERVICE%-service}" 
-    FULL_IMAGE="${ECR_REGISTRY}/${REPO_NAME}:${GIT_SHA}"
-    docker build -t ${FULL_IMAGE} local/services/${SERVICE}
-    docker push ${FULL_IMAGE}
-done
-```
-
-2. **Sincronização de Tags (GitOps Sync)**:
-
-Atualize as imagens nos manifestos nos diretórios `k8s/apps/`. O ArgoCD detectará o novo commit e iniciará o deploy no cluster.
-
-**Nota**: O uso de pipelines é o método preferencial para manter a integridade e rastreabilidade do processo GitOps.
+Execute o [workfloew de deploy](https://github.com/KauanCarvalho/fiap-dac-toggle-master/actions/workflows/deploy.yml) para realizar o build e push dos serviços para os ECRs criados via Terraform, além de commitar aqui no repositório as versões das imagens que serão sincronizadas pelo ArgoCD.
 
 ### Passo 5: Preparação do Cluster Kubernetes
 
 Conecte-se ao cluster via terminal e aplique os namespaces de fundação:
+
 ```bash
 aws eks update-kubeconfig --name togglemaster-cluster --region us-east-1
 kubectl apply -f k8s/apps/00-namespaces.yaml
@@ -145,11 +119,11 @@ No painel do ArgoCD, realize a sincronização do aplicativo `core-infra` antes 
 
 ---
 
-## 5. Banco de Dados e Migrações
+## 7. Banco de Dados e Migrações
 
 Certos microserviços (como Auth, Flag e Targeting) dependem da execução de queries iniciais ou migrations para o correto funcionamento das tabelas e procedimentos no PostgreSQL. Você pode encontrar os scripts SQL necessários no repositório de origem das aplicações: [Scripts SQL](https://github.com/KauanCarvalho/fiap-dac-toggle-master/tree/main/local/services).
 
-### 5.1. Executando Queries Manualmente via Pod Temporário
+### 7.1. Executando Queries Manualmente via Pod Temporário
 
 Como o RDS está em uma sub-rede privada e o acesso direto via console pode estar restrito no AWS Academy, a forma recomendada de executar os scripts é subindo um Pod temporário dentro do cluster que tenha o cliente `psql` instalado.
 
@@ -164,11 +138,11 @@ kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
-  name: net-test
+  name: pg-temp
   namespace: default
 spec:
   containers:
-  - name: net-test
+  - name: pg-temp
     image: postgres:16-alpine
     command: ["sleep", "3600"]
   restartPolicy: Never
@@ -176,9 +150,10 @@ EOF
 ```
 
 3. **Acesse o Pod e Execute o psql**:
-   Utilize as senhas configuradas nos **GitHub Secrets** (`DB_PASSWORD_AUTH`, `DB_PASSWORD_FLAG`, etc.) para realizar o login:
+   Utilize as senhas configuradas nos **GitHub Secrets** (`DB_PASSWORD_AUTH`, `DB_PASSWORD_FLAG`, etc.) para realizar o login, a senha é definida no cofre de segredos do Github Actions que vai parar em um _Secret Manager_ da AWS via Terraform.
+
 ```bash
-kubectl exec -it net-test -- psql -h <RDS_ENDPOINT> -U <USER> -d <DB_NAME>
+kubectl exec -it pg-temp -- psql -h <RDS_ENDPOINT> -U <USER> -d <DB_NAME>
 ```
 
 ### ⚠️ WARNING: O Problema das Migrações Manuais
@@ -197,14 +172,23 @@ Neste projeto específico, os scripts de banco não estavam previamente versiona
 
 ---
 
-## 6. Validação e Evidência de Operação
+## 8. Validação e Evidência de Operação
 
-Após a sincronização, os serviços podem ser validados através dos endereços de Health Check fornecidos pelo Ingress Load Balancer:
+Após a sincronização, os serviços podem ser validados através dos endereços de Health Check fornecidos pelo Ingress Load Balancer, que por sua vez é gerenciado pelo ArgoCD além de ser um dos _outputs_ do Terraform.
 
 - **Auth Service**: `http://<LB_DNS>/auth/health` -> `{"status":"ok"}`
 - **Flag Service**: `http://<LB_DNS>/flags/health` -> `{"status":"ok"}`
 - **Evaluation Service**: `http://<LB_DNS>/evaluate/health` -> `{"status":"ok"}`
 - **Analytics Service**: `http://<LB_DNS>/analytics/health` -> `{"status":"ok"}`
+- **Targeting Service**: `http://<LB_DNS>/targeting/health` -> `{"status":"ok"}`
+
+## 9. Validação de integrida do cluster
+
+Para confirmar que o cluster está operando corretamente, no repositório de origem das aplicações existe um script que valida todas as chamadas possíveis e mapeadas. Ela se baseia em envs presentes no `.env.prod` que se originam de um `.env.prod.sample` altere para as _envs_ e sucesso!
+
+```bash
+make check-all ENV=prod
+```
 
 ### Evidência de Operação - Cluster Status
 
@@ -212,6 +196,6 @@ Após a sincronização, os serviços podem ser validados através dos endereço
 
 ---
 
-## 7. Considerações Finais
+## 9. Considerações Finais
 
 Toda a infraestrutura descrita foi projetada sob o princípio de imutabilidade. Conflitos de versão foram eliminados através da centralização no repositório de GitOps, e a segurança foi reforçada com a injeção dinâmica de segredos via AWS Secrets Manager, atendendo integralmente aos requisitos da Fase 3 do Tech Challenge.
