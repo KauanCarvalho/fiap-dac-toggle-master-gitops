@@ -41,27 +41,27 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         REPOSITÓRIO DE APLICAÇÕES                        │
+│                         REPOSITÓRIO DE APLICAÇÕES                       │
 │          github.com/KauanCarvalho/fiap-dac-toggle-master                │
-│                                                                           │
-│  ┌──────────────────────────────────────────────────────────────┐        │
-│  │               GitHub Actions CI Pipeline                     │        │
-│  │  1. Build & Unit Test                                        │        │
-│  │  2. Lint / Static Analysis (golangci-lint, pylint)           │        │
-│  │  3. Security Scan → SCA (Trivy fs) + SAST (gosec/bandit)     │        │
-│  │     └─ BLOQUEIO se vulnerabilidade CRÍTICA encontrada        │        │
-│  │  4. Docker Build → Container Scan (Trivy image) → ECR Push  │        │
-│  │     └─ Tag: v1.0.0-<commit-hash>                             │        │
-│  │  5. Trigger GitOps → commit automático no repo abaixo ↓     │        │
-│  └──────────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────┐       │
+│  │               GitHub Actions CI Pipeline                     │       │
+│  │  1. Build & Unit Test                                        │       │
+│  │  2. Lint / Static Analysis (golangci-lint, pylint)           │       │
+│  │  3. Security Scan → SCA (Trivy fs) + SAST (gosec/bandit)     │       │
+│  │     └─ BLOQUEIO se vulnerabilidade CRÍTICA encontrada        │       │
+│  │  4. Docker Build → Container Scan (Trivy image) → ECR Push   │       │
+│  │     └─ Tag: v1.0.0-<commit-hash>                             │       │
+│  │  5. Trigger GitOps → commit automático no repo abaixo ↓      │       │
+│  └──────────────────────────────────────────────────────────────┘       │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │ commit automático (GitHub App)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    ESTE REPOSITÓRIO (GitOps)                             │
+│                    ESTE REPOSITÓRIO (GitOps)                            │
 │          github.com/KauanCarvalho/fiap-dac-toggle-master-gitops         │
-│                                                                           │
-│  ├── terraform/       → IaC (VPC, EKS, RDS, Redis, DynamoDB, SQS, ECR) │
+│                                                                         │
+│  ├── terraform/       → IaC (VPC, EKS, RDS, Redis, DynamoDB, SQS, ECR)  │
 │  ├── k8s/apps/        → Manifestos Kubernetes (fonte de verdade)        │
 │  │   └── <service>/deployment.yaml  ← tag atualizada pelo CI            │
 │  └── argocd/          → ArgoCD Application definitions                  │
@@ -69,14 +69,14 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
                                  │ monitoramento contínuo (pull)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          AWS EKS CLUSTER                                 │
-│                                                                           │
-│  ArgoCD (selfHeal: true, prune: true)                                    │
-│  └─ Detecta mudança → Sincroniza automaticamente → Deploy da nova versão │
-│                                                                           │
-│  5 Microsserviços: auth · flag · targeting · evaluation · analytics      │
-│  External Secrets Operator → AWS Secrets Manager (sem credenciais em     │
-│  texto plano)                                                             │
+│                          AWS EKS CLUSTER                                │
+│                                                                         │
+│  ArgoCD (selfHeal: true, prune: true)                                   │
+│  └─ Detecta mudança → Sincroniza automaticamente → Deploy da nova versão│
+│                                                                         │
+│  5 Microsserviços: auth · flag · targeting · evaluation · analytics     │
+│  External Secrets Operator → AWS Secrets Manager (sem credenciais em    │
+│  texto plano)                                                           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
