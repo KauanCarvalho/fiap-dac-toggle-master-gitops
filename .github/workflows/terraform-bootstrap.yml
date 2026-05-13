@@ -13,7 +13,7 @@ on:
           - apply
 
 env:
-  TF_VERSION: "1.6.0"
+  TF_VERSION: "1.9.8"
   WORKING_DIR: terraform/bootstrap
   AWS_REGION: us-east-1
 

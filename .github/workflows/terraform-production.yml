@@ -19,7 +19,7 @@ on:
           - destroy
 
 env:
-  TF_VERSION: "1.6.0"
+  TF_VERSION: "1.9.8"
   WORKING_DIR: terraform/production
   AWS_REGION: us-east-1
   TF_VAR_db_password_auth: ${{ secrets.DB_PASSWORD_AUTH }}
