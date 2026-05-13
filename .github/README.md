@@ -4,9 +4,87 @@
 
 Este projeto contempla a automação completa da infraestrutura e dos processos de entrega contínua (CI/CD) para o ecossistema de microsserviços ToggleMaster (Auth, Flag, Targeting, Evaluation e Analytics). A solução adota práticas avançadas de Infraestrutura como Código (IaC) com Terraform, Segurança (DevSecOps) e Entrega baseada em GitOps com ArgoCD.
 
-## 2. Requisitos Técnicos Implementados
+## 2. Estrutura do Repositório
 
-### 2.1. Infraestrutura como Código (Terraform)
+```
+.
+├── .github/
+│   ├── README.md
+│   └── workflows/
+│       ├── terraform-bootstrap.yml   # Cria S3 + DynamoDB para o estado remoto
+│       └── terraform-production.yml  # Provisiona VPC, EKS, RDS ×3, ElastiCache, DynamoDB, SQS, ECR ×5, ArgoCD, Ingress Nginx, ESO, Secrets Manager
+├── argocd/
+│   ├── core-infra.yaml               # App ArgoCD para recursos base do cluster
+│   ├── auth-service.yaml
+│   ├── flag-service.yaml
+│   ├── targeting-service.yaml
+│   ├── evaluation-service.yaml
+│   └── analytics-service.yaml
+├── k8s/
+│   ├── apps/                         # Manifestos Kubernetes (fonte de verdade do GitOps)
+│   │   ├── 00-namespaces.yaml
+│   │   ├── cluster-secret-store.yaml
+│   │   ├── ingress.yaml
+│   │   └── <service>/                # deployment, service, configmap, hpa, external-secret
+│   └── templates/                    # Templates usados pelo CI para atualizar tags de imagem
+└── terraform/
+    ├── bootstrap/                    # Estado remoto: S3 + DynamoDB lock
+    ├── modules/aws/                  # Módulos reutilizáveis: vpc, eks, rds, ecr, sqs, etc.
+    └── production/                   # Orquestração principal da infra + Helm (ArgoCD, ESO, Ingress)
+```
+
+> As pipelines de CI/DevSecOps (Build, Lint, SAST/SCA, Docker, ECR) residem nos repositórios individuais de cada microsserviço em [fiap-dac-toggle-master](https://github.com/KauanCarvalho/fiap-dac-toggle-master). Este repositório é exclusivamente o **repositório de GitOps**: manifestos Kubernetes, definições ArgoCD e Terraform de infraestrutura.
+
+---
+
+## 3. Arquitetura Geral
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         REPOSITÓRIO DE APLICAÇÕES                       │
+│          github.com/KauanCarvalho/fiap-dac-toggle-master                │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────┐       │
+│  │               GitHub Actions CI Pipeline                     │       │
+│  │  1. Build & Unit Test                                        │       │
+│  │  2. Lint / Static Analysis (golangci-lint, pylint)           │       │
+│  │  3. Security Scan → SCA (Trivy fs) + SAST (gosec/bandit)     │       │
+│  │     └─ BLOQUEIO se vulnerabilidade CRÍTICA encontrada        │       │
+│  │  4. Docker Build → Container Scan (Trivy image) → ECR Push   │       │
+│  │     └─ Tag: v1.0.0-<commit-hash>                             │       │
+│  │  5. Trigger GitOps → commit automático no repo abaixo ↓      │       │
+│  └──────────────────────────────────────────────────────────────┘       │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │ commit automático (GitHub App)
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    ESTE REPOSITÓRIO (GitOps)                            │
+│          github.com/KauanCarvalho/fiap-dac-toggle-master-gitops         │
+│                                                                         │
+│  ├── terraform/       → IaC (VPC, EKS, RDS, Redis, DynamoDB, SQS, ECR)  │
+│  ├── k8s/apps/        → Manifestos Kubernetes (fonte de verdade)        │
+│  │   └── <service>/deployment.yaml  ← tag atualizada pelo CI            │
+│  └── argocd/          → ArgoCD Application definitions                  │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │ monitoramento contínuo (pull)
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          AWS EKS CLUSTER                                │
+│                                                                         │
+│  ArgoCD (selfHeal: true, prune: true)                                   │
+│  └─ Detecta mudança → Sincroniza automaticamente → Deploy da nova versão│
+│                                                                         │
+│  5 Microsserviços: auth · flag · targeting · evaluation · analytics     │
+│  External Secrets Operator → AWS Secrets Manager (sem credenciais em    │
+│  texto plano)                                                           │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Requisitos Técnicos Implementados
+
+### 4.1. Infraestrutura como Código (Terraform)
 
 A infraestrutura foi componentizada em módulos reutilizáveis, garantindo isolamento e manutenibilidade:
 - **Networking**: VPC customizada com isolamento de Subnets Públicas e Privadas, Internet Gateway e Tabelas de Roteamento configuradas para alta disponibilidade.
@@ -19,24 +97,33 @@ A infraestrutura foi componentizada em módulos reutilizáveis, garantindo isola
 - **Repositórios**: Cinco repositórios no AWS ECR configurados via Terraform para armazenamento de imagens Docker.
 - **Estado Remoto**: O arquivo de estado do Terraform (`terraform.tfstate`) é gerenciado remotamente em um Bucket S3 com mecanismos de Lock via DynamoDB.
 
-### 2.2. Segurança e DevSecOps (CI)
+### 4.2. Segurança e DevSecOps (CI)
 
-As pipelines de Integração Contínua (GitHub Actions) foram configuradas para cada microsserviço, implementando os seguintes estágios de segurança:
-1. **Linter/Static Analysis**: Verificação de qualidade do código fonte.
-2. **Security Scan (SAST/SCA)**: Utilização de ferramentas como Trivy para análise de vulnerabilidades em dependências e código (bloqueio automático em caso de falhas críticas).
-3. **Container Scan**: Análise de vulnerabilidades na imagem final antes do push para o ECR.
-4. **Secrets Management**: Integração com AWS Secrets Manager e External Secrets Operator (ESO) para evitar o uso de credenciais em texto plano.
+As pipelines de Integração Contínua (GitHub Actions) foram configuradas nos repositórios de cada microsserviço, implementando os seguintes estágios obrigatórios:
 
-### 2.3. Entrega Contínua e GitOps (CD)
+1. **Build & Unit Test**: Compilação do código e execução de testes unitários a cada Pull Request e Push na Main.
+2. **Linter/Static Analysis**: Verificação de qualidade e estilo do código fonte (ex: `golangci-lint` para Go).
+3. **Security Scan (SAST & SCA)**:
+   - **SCA**: Varredura de vulnerabilidades em dependências via **Trivy** em modo `fs`.
+   - **SAST**: Análise estática de segurança no código fonte (ex: **gosec** para Go).
+   - **Regra de Bloqueio**: Vulnerabilidades com severidade **CRITICAL** interrompem o pipeline imediatamente.
+4. **Docker Build & Push**:
+   - Build da imagem Docker.
+   - **Container Scan** com Trivy na imagem gerada antes do push.
+   - Login e push para o **AWS ECR** com a tag baseada no commit hash (ex: `v1.0.0-a1b2c3d`).
+5. **Trigger GitOps**: Ao final do pipeline, um commit automático é realizado **neste repositório** (via GitHub App) atualizando a tag da imagem nos manifestos `k8s/apps/`.
+6. **Secrets Management**: Integração com AWS Secrets Manager e External Secrets Operator (ESO) para evitar o uso de credenciais em texto plano.
+
+### 4.3. Entrega Contínua e GitOps (CD)
 
 O deploy das aplicações não é mais realizado via Push direto, mas sim via **Pull/GitOps**:
-- **ArgoCD**: Instalado via Helm Provider no Terraform, gerenciando o ciclo de vida dos recursos no cluster.
-- **Atualização de Imagens**: O workflow de CI atualiza dinamicamente as tags de imagem nos manifestos Kubernetes do repositório GitOps.
-- **External Secrets**: Sincronização automática de segredos da infraestrutura para o cluster sem intervenção manual através do ClusterSecretStore.
+- **ArgoCD**: Instalado via Helm Provider no Terraform, gerenciando o ciclo de vida dos 5 microsserviços no cluster EKS. A aplicação `core-infra` é sincronizada primeiro e instala os recursos base (namespaces, ClusterSecretStore, Ingress). Em seguida, cada microsserviço possui seu próprio objeto `Application` ArgoCD com `selfHeal: true` e `prune: true`.
+- **Atualização de Imagens**: O workflow de CI atualiza dinamicamente as tags de imagem nos manifestos `k8s/apps/<service>/deployment.yaml` deste repositório GitOps via commit automatizado. Os arquivos `k8s/templates/` servem como base para geração desses manifests com a nova tag.
+- **External Secrets**: Sincronização automática de segredos do AWS Secrets Manager para o cluster via `ClusterSecretStore`, sem intervenção manual.
 
 ---
 
-## 3. Configuração de Variáveis (GitHub Secrets)
+## 5. Configuração de Variáveis (GitHub Secrets)
 
 Configure as seguintes **8 chaves** no seu repositório (**Settings > Secrets and variables > Actions**):
 
@@ -46,7 +133,7 @@ Configure as seguintes **8 chaves** no seu repositório (**Settings > Secrets an
 
 ---
 
-## 4. Guia de Implantação (Setup)
+## 6. Guia de Implantação (Setup)
 
 Para reproduzir o ambiente de forma íntegra, siga a sequência abaixo:
 
@@ -66,7 +153,7 @@ Para interagir com o cluster e os repositórios via CLI, certifique-se de que o 
 
 O ciclo de vida das imagens e do deploy é gerenciado de forma automatizada, permitindo que a imagem seja alterada via GitOps.
 
-#### 4.1. Automação via Pipelines (Recomendado)
+#### Automação via Pipelines (Recomendado)
 
 O fluxo principal de deploy utiliza pipelines (GitHub Actions) nos repositórios dos microsserviços. Esse processo funciona de forma integrada:
 
@@ -79,7 +166,7 @@ Este fluxo garante que a imagem em produção seja sempre rastreável, testada e
 
 *Como fazer*:
 
-Execute o [workfloew de deploy](https://github.com/KauanCarvalho/fiap-dac-toggle-master/actions/workflows/deploy.yml) para realizar o build e push dos serviços para os ECRs criados via Terraform, além de commitar aqui no repositório as versões das imagens que serão sincronizadas pelo ArgoCD.
+Execute o [workflow de deploy](https://github.com/KauanCarvalho/fiap-dac-toggle-master/actions/workflows/deploy.yml) para realizar o build e push dos serviços para os ECRs criados via Terraform, além de commitar aqui no repositório as versões das imagens que serão sincronizadas pelo ArgoCD.
 
 ### Passo 5: Preparação do Cluster Kubernetes
 
@@ -182,7 +269,7 @@ Após a sincronização, os serviços podem ser validados através dos endereço
 - **Analytics Service**: `http://<LB_DNS>/analytics/health` -> `{"status":"ok"}`
 - **Targeting Service**: `http://<LB_DNS>/targeting/health` -> `{"status":"ok"}`
 
-## 9. Validação de integrida do cluster
+## 9. Validação de Integridade do Cluster
 
 Para confirmar que o cluster está operando corretamente, no repositório de origem das aplicações existe um script que valida todas as chamadas possíveis e mapeadas. Ela se baseia em envs presentes no `.env.prod` que se originam de um `.env.prod.sample` altere para as _envs_ e sucesso!
 
@@ -196,6 +283,6 @@ make check-all ENV=prod
 
 ---
 
-## 9. Considerações Finais
+## 10. Considerações Finais
 
 Toda a infraestrutura descrita foi projetada sob o princípio de imutabilidade. Conflitos de versão foram eliminados através da centralização no repositório de GitOps, e a segurança foi reforçada com a injeção dinâmica de segredos via AWS Secrets Manager, atendendo integralmente aos requisitos da Fase 3 do Tech Challenge.
