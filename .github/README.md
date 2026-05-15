@@ -1,5 +1,23 @@
 # TECH CHALLENGE - FASE 3: Automação e GitOps ToggleMaster
 
+Turma: **2DCLT** — DevOps e Arquitetura Cloud Pós Tech.
+
+## Integrantes do Grupo
+
+| Nome | RM |
+| :--- | :--- |
+| Guilherme Correa Camargo | 369954 |
+| Kauan Carvalho Calasans | 370203 |
+| Pedro Henrique Coittinho Marcondes de Andrade | 369367 |
+
+## Documentação de Vídeo
+
+O vídeo técnico detalha o provisionamento via Terraform, a falha proposital na pipeline de segurança e o processo de sincronização do ArgoCD.
+
+- [Link da Demonstração (YouTube)](https://www.youtube.com/watch?v=UXEEftRU1LE) 
+
+---
+
 ## 1. Introdução
 
 Este projeto contempla a automação completa da infraestrutura e dos processos de entrega contínua (CI/CD) para o ecossistema de microsserviços ToggleMaster (Auth, Flag, Targeting, Evaluation e Analytics). A solução adota práticas avançadas de Infraestrutura como Código (IaC) com Terraform, Segurança (DevSecOps) e Entrega baseada em GitOps com ArgoCD.
