@@ -1,15 +1,63 @@
-# ============================================================
-# OBSERVABILITY STACK — Fase 4
-# Prometheus + Grafana + Loki + OTel Collector + Datadog
-# ============================================================
+# ----- Namespace de Monitoramento -----
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+  depends_on = [module.eks]
+}
+
+# ----- AlertManager Config Secret (Injeção dinâmica de Webhook e Chaves) -----
+resource "kubernetes_secret_v1" "alertmanager_config" {
+  metadata {
+    name      = "alertmanager-config"
+    namespace = kubernetes_namespace.monitoring.metadata[0].name
+  }
+
+  type = "Opaque"
+
+  data = {
+    "alertmanager.yaml" = <<-EOT
+      global:
+        resolve_timeout: 5m
+
+      route:
+        group_by: ['alertname', 'namespace', 'service']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 1h
+        receiver: 'discord'
+        routes:
+          - matchers:
+              - alertname =~ ".*"
+            receiver: 'discord'
+
+      receivers:
+        - name: 'discord'
+          webhook_configs:
+            - url: "${var.discord_webhook_url}"
+              send_resolved: true
+              title: '{{ if eq .Status "firing" }}🔥 ALERTA DISPARADO{{ else }}✅ RESOLVIDO{{ end }}'
+              text: |
+                **{{ .CommonAnnotations.summary }}**
+                {{ range .Alerts }}
+                - **Serviço:** {{ .Labels.service }}
+                - **Namespace:** {{ .Labels.namespace }}
+                - **Severidade:** {{ .Labels.severity }}
+                - **Descrição:** {{ .Annotations.description }}
+                {{ end }}
+    EOT
+  }
+
+  depends_on = [kubernetes_namespace.monitoring]
+}
 
 # ----- kube-prometheus-stack (Prometheus + Grafana + AlertManager) -----
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
-  namespace        = "monitoring"
-  create_namespace = true
+  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  create_namespace = false
   version          = "61.3.2"
   timeout          = 600
 
@@ -52,7 +100,10 @@ resource "helm_release" "kube_prometheus_stack" {
     EOT
   ]
 
-  depends_on = [module.eks]
+  depends_on = [
+    kubernetes_namespace.monitoring,
+    kubernetes_secret_v1.alertmanager_config
+  ]
 }
 
 # ----- Loki (log aggregation) -----
@@ -60,8 +111,8 @@ resource "helm_release" "loki" {
   name             = "loki"
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "loki"
-  namespace        = "monitoring"
-  create_namespace = true
+  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  create_namespace = false
   version          = "6.6.4"
   timeout          = 300
 
@@ -87,7 +138,7 @@ resource "helm_release" "loki" {
     EOT
   ]
 
-  depends_on = [module.eks]
+  depends_on = [kubernetes_namespace.monitoring]
 }
 
 # ----- Promtail (log shipper → Loki) -----
@@ -95,8 +146,8 @@ resource "helm_release" "promtail" {
   name             = "promtail"
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "promtail"
-  namespace        = "monitoring"
-  create_namespace = true
+  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  create_namespace = false
   version          = "6.16.4"
   timeout          = 180
 
@@ -116,8 +167,8 @@ resource "helm_release" "otel_collector" {
   name             = "otel-collector"
   repository       = "https://open-telemetry.github.io/opentelemetry-helm-charts"
   chart            = "opentelemetry-collector"
-  namespace        = "monitoring"
-  create_namespace = true
+  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  create_namespace = false
   version          = "0.97.1"
   timeout          = 300
 
@@ -196,6 +247,7 @@ resource "helm_release" "otel_collector" {
   ]
 
   depends_on = [
+    kubernetes_namespace.monitoring,
     helm_release.kube_prometheus_stack,
     helm_release.loki,
   ]
@@ -206,8 +258,8 @@ resource "helm_release" "datadog" {
   name             = "datadog"
   repository       = "https://helm.datadoghq.com"
   chart            = "datadog"
-  namespace        = "monitoring"
-  create_namespace = true
+  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  create_namespace = false
   version          = "3.69.3"
   timeout          = 300
 
@@ -235,7 +287,10 @@ resource "helm_release" "datadog" {
     EOT
   ]
 
-  depends_on = [module.eks]
+  depends_on = [
+    kubernetes_namespace.monitoring,
+    module.eks
+  ]
 }
 
 # Saída do Grafana LoadBalancer
@@ -247,7 +302,10 @@ output "grafana_url" {
 data "kubernetes_service" "grafana" {
   metadata {
     name      = "kube-prometheus-stack-grafana"
-    namespace = "monitoring"
+    namespace = kubernetes_namespace.monitoring.metadata[0].name
   }
-  depends_on = [helm_release.kube_prometheus_stack]
+  depends_on = [
+    kubernetes_namespace.monitoring,
+    helm_release.kube_prometheus_stack
+  ]
 }

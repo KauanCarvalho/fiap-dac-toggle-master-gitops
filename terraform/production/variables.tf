@@ -68,3 +68,16 @@ variable "datadog_app_key" {
   type        = string
   sensitive   = true
 }
+
+variable "discord_webhook_url" {
+  description = "Discord Webhook URL for ChatOps alerts"
+  type        = string
+  sensitive   = true
+}
+
+variable "pagerduty_integration_key" {
+  description = "PagerDuty Integration Key for incident alerts"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
