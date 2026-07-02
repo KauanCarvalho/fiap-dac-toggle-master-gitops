@@ -116,7 +116,7 @@ module "eks" {
   subnet_ids     = module.vpc.public_subnets
   eks_sg_id      = module.eks_sg.sg_id
   instance_types = ["t3.medium"]
-  desired_size   = 2
-  max_size       = 3
-  min_size       = 1
+  desired_size   = 3
+  max_size       = 4
+  min_size       = 2
 }
