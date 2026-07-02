@@ -1,5 +1,5 @@
 # ----- Namespace de Monitoramento -----
-resource "kubernetes_namespace" "monitoring" {
+resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = "monitoring"
   }
@@ -10,7 +10,7 @@ resource "kubernetes_namespace" "monitoring" {
 resource "kubernetes_secret_v1" "alertmanager_config" {
   metadata {
     name      = "alertmanager-config"
-    namespace = kubernetes_namespace.monitoring.metadata[0].name
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
   }
 
   type = "Opaque"
@@ -60,7 +60,7 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
     EOT
   }
 
-  depends_on = [kubernetes_namespace.monitoring]
+  depends_on = [kubernetes_namespace_v1.monitoring]
 }
 
 # ----- kube-prometheus-stack (Prometheus + Grafana + AlertManager) -----
@@ -68,7 +68,7 @@ resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
-  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
   create_namespace = false
   version          = "61.3.2"
   timeout          = 600
@@ -113,7 +113,7 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 
   depends_on = [
-    kubernetes_namespace.monitoring,
+    kubernetes_namespace_v1.monitoring,
     kubernetes_secret_v1.alertmanager_config
   ]
 }
@@ -123,7 +123,7 @@ resource "helm_release" "loki" {
   name             = "loki"
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "loki"
-  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
   create_namespace = false
   version          = "6.6.4"
   timeout          = 300
@@ -132,6 +132,7 @@ resource "helm_release" "loki" {
     <<-EOT
     deploymentMode: SingleBinary
     loki:
+      useTestSchema: true
       commonConfig:
         replication_factor: 1
       storage:
@@ -150,7 +151,7 @@ resource "helm_release" "loki" {
     EOT
   ]
 
-  depends_on = [kubernetes_namespace.monitoring]
+  depends_on = [kubernetes_namespace_v1.monitoring]
 }
 
 # ----- Promtail (log shipper → Loki) -----
@@ -158,7 +159,7 @@ resource "helm_release" "promtail" {
   name             = "promtail"
   repository       = "https://grafana.github.io/helm-charts"
   chart            = "promtail"
-  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
   create_namespace = false
   version          = "6.16.4"
   timeout          = 180
@@ -179,7 +180,7 @@ resource "helm_release" "otel_collector" {
   name             = "otel-collector"
   repository       = "https://open-telemetry.github.io/opentelemetry-helm-charts"
   chart            = "opentelemetry-collector"
-  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
   create_namespace = false
   version          = "0.97.1"
   timeout          = 300
@@ -259,7 +260,7 @@ resource "helm_release" "otel_collector" {
   ]
 
   depends_on = [
-    kubernetes_namespace.monitoring,
+    kubernetes_namespace_v1.monitoring,
     helm_release.kube_prometheus_stack,
     helm_release.loki,
   ]
@@ -270,7 +271,7 @@ resource "helm_release" "datadog" {
   name             = "datadog"
   repository       = "https://helm.datadoghq.com"
   chart            = "datadog"
-  namespace        = kubernetes_namespace.monitoring.metadata[0].name
+  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
   create_namespace = false
   version          = "3.69.3"
   timeout          = 300
@@ -300,7 +301,7 @@ resource "helm_release" "datadog" {
   ]
 
   depends_on = [
-    kubernetes_namespace.monitoring,
+    kubernetes_namespace_v1.monitoring,
     module.eks
   ]
 }
@@ -314,10 +315,10 @@ output "grafana_url" {
 data "kubernetes_service" "grafana" {
   metadata {
     name      = "kube-prometheus-stack-grafana"
-    namespace = kubernetes_namespace.monitoring.metadata[0].name
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
   }
   depends_on = [
-    kubernetes_namespace.monitoring,
+    kubernetes_namespace_v1.monitoring,
     helm_release.kube_prometheus_stack
   ]
 }
