@@ -15,6 +15,8 @@ spec:
       labels:
         app: evaluation-service
     spec:
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: evaluation-service
           image: 766401690140.dkr.ecr.us-east-1.amazonaws.com/togglemaster-evaluation:v1.0.0-6f49968
