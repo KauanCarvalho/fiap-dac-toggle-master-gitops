@@ -189,7 +189,7 @@ resource "helm_release" "otel_collector" {
             scrape_configs:
               - job_name: otel-collector
                 static_configs:
-                  - targets: ['${HOSTNAME}:8888']
+                  - targets: ['$${HOSTNAME}:8888']
 
       processors:
         batch:
