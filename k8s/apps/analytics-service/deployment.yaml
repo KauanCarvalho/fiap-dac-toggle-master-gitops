@@ -17,8 +17,6 @@ spec:
     spec:
       imagePullSecrets:
       - name: ecr-pull-secret
-      imagePullSecrets:
-      - name: ecr-pull-secret
       containers:
         - name: analytics-service
           image: 667070726571.dkr.ecr.us-east-1.amazonaws.com/togglemaster-analytics:v1.0.0-6f49968
