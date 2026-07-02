@@ -30,6 +30,9 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
           - matchers:
               - alertname =~ ".*"
             receiver: 'discord'
+          - matchers:
+              - alertname =~ ".*"
+            receiver: 'pagerduty'
 
       receivers:
         - name: 'discord'
@@ -45,6 +48,15 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
                 - **Severidade:** {{ .Labels.severity }}
                 - **Descrição:** {{ .Annotations.description }}
                 {{ end }}
+
+        - name: 'pagerduty'
+          pagerduty_configs:
+            - routing_key: "${var.pagerduty_integration_key}"
+              description: '{{ .CommonAnnotations.summary }}'
+              details:
+                namespace: '{{ .CommonLabels.namespace }}'
+                service: '{{ .CommonLabels.service }}'
+                severity: '{{ .CommonLabels.severity }}'
     EOT
   }
 
