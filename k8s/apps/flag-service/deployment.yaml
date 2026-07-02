@@ -39,6 +39,10 @@ spec:
                 secretKeyRef:
                   name: flag-service-secret
                   key: DATABASE_URL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "flag-service"
           resources:
             requests:
               cpu: "100m"

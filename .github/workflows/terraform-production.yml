@@ -30,6 +30,8 @@ env:
   TF_VAR_aws_session_token: ${{ secrets.AWS_SESSION_TOKEN }}
   TF_VAR_eval_api_key: ${{ secrets.EVAL_API_KEY }}
   TF_VAR_auth_master_key: ${{ secrets.AUTH_MASTER_KEY }}
+  TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
+  TF_VAR_datadog_app_key: ${{ secrets.DATADOG_APP_KEY }}
 
 jobs:
   terraform-plan:
