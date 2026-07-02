@@ -99,10 +99,16 @@ resource "helm_release" "kube_prometheus_stack" {
         serviceMonitorSelectorNilUsesHelmValues: false
         podMonitorSelectorNilUsesHelmValues: false
         ruleSelectorNilUsesHelmValues: false
+        storageSpec:
+          emptyDir:
+            medium: ""
 
     alertmanager:
       alertmanagerSpec:
         configSecret: alertmanager-config
+        storageSpec:
+          emptyDir:
+            medium: ""
 
     kubeStateMetrics:
       enabled: true
@@ -140,6 +146,8 @@ resource "helm_release" "loki" {
       auth_enabled: false
     singleBinary:
       replicas: 1
+      persistence:
+        enabled: false
     minio:
       enabled: false
     backend:
@@ -148,6 +156,10 @@ resource "helm_release" "loki" {
       replicas: 0
     write:
       replicas: 0
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
     EOT
   ]
 
