@@ -231,9 +231,9 @@ resource "helm_release" "otel_collector" {
         loki:
           endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         otlp/datadog:
-          endpoint: https://api.datadoghq.com
-          headers:
-            DD-Api-Key: ${var.datadog_api_key}
+          endpoint: datadog.monitoring.svc.cluster.local:4317
+          tls:
+            insecure: true
         debug:
           verbosity: basic
 
@@ -272,6 +272,7 @@ resource "helm_release" "otel_collector" {
     kubernetes_namespace_v1.monitoring,
     helm_release.kube_prometheus_stack,
     helm_release.loki,
+    helm_release.datadog,
   ]
 }
 
