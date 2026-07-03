@@ -172,26 +172,7 @@ resource "helm_release" "loki" {
   depends_on = [kubernetes_namespace_v1.monitoring]
 }
 
-# ----- Promtail (log shipper → Loki) -----
-resource "helm_release" "promtail" {
-  name             = "promtail"
-  repository       = "https://grafana.github.io/helm-charts"
-  chart            = "promtail"
-  namespace        = kubernetes_namespace_v1.monitoring.metadata[0].name
-  create_namespace = false
-  version          = "6.16.4"
-  timeout          = 180
-
-  values = [
-    <<-EOT
-    config:
-      clients:
-        - url: http://loki:3100/loki/api/v1/push
-    EOT
-  ]
-
-  depends_on = [helm_release.loki]
-}
+# Promtail removido: o OTel Collector coleta logs via filelog receiver e envia para Loki
 
 # ----- OpenTelemetry Collector (DaemonSet) -----
 resource "helm_release" "otel_collector" {
@@ -209,6 +190,11 @@ resource "helm_release" "otel_collector" {
 
     image:
       repository: otel/opentelemetry-collector-contrib
+
+    presets:
+      logsCollection:
+        enabled: true
+        includeCollectorLogs: false
 
     config:
       receivers:
@@ -271,11 +257,13 @@ resource "helm_release" "otel_collector" {
         enabled: true
         containerPort: 4317
         servicePort: 4317
+        hostPort: 0
         protocol: TCP
       otlp-http:
         enabled: true
         containerPort: 4318
         servicePort: 4318
+        hostPort: 0
         protocol: TCP
     EOT
   ]
