@@ -207,6 +207,9 @@ resource "helm_release" "otel_collector" {
     <<-EOT
     mode: daemonset
 
+    image:
+      repository: otel/opentelemetry-collector-contrib
+
     config:
       receivers:
         otlp:
@@ -240,7 +243,7 @@ resource "helm_release" "otel_collector" {
         prometheusremotewrite:
           endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
         loki:
-          endpoint: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+          endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         otlp/datadog:
           endpoint: https://api.datadoghq.com
           headers:
