@@ -277,6 +277,35 @@ resource "helm_release" "otel_collector" {
   ]
 }
 
+# ----- OpenTelemetry Collector Service -----
+resource "kubernetes_service_v1" "otel_collector" {
+  metadata {
+    name      = "otel-collector"
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
+  }
+  spec {
+    selector = {
+      "app.kubernetes.io/name"     = "opentelemetry-collector"
+      "app.kubernetes.io/instance" = "otel-collector"
+    }
+    port {
+      name        = "otlp-grpc"
+      port        = 4317
+      target_port = 4317
+      protocol    = "TCP"
+    }
+    port {
+      name        = "otlp-http"
+      port        = 4318
+      target_port = 4318
+      protocol    = "TCP"
+    }
+    type = "ClusterIP"
+  }
+  depends_on = [helm_release.otel_collector]
+}
+
+
 # ----- Datadog Agent -----
 resource "helm_release" "datadog" {
   name             = "datadog"
