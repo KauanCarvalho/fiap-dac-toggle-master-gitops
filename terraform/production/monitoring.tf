@@ -96,6 +96,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
     prometheus:
       prometheusSpec:
+        enableRemoteWriteReceiver: true
         serviceMonitorSelectorNilUsesHelmValues: false
         podMonitorSelectorNilUsesHelmValues: false
         ruleSelectorNilUsesHelmValues: false
