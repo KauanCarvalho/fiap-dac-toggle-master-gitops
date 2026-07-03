@@ -148,6 +148,12 @@ resource "helm_release" "loki" {
       replicas: 1
       persistence:
         enabled: false
+      extraVolumes:
+        - name: loki-data
+          emptyDir: {}
+      extraVolumeMounts:
+        - name: loki-data
+          mountPath: /var/loki
     minio:
       enabled: false
     backend:
