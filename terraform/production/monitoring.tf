@@ -316,6 +316,103 @@ resource "helm_release" "datadog" {
   ]
 }
 
+# ----- Datadog Log Pipelines (corrige status "ERROR" falso-positivo) -----
+# O Agent tageia logs coletados via stderr como status=error por padrão,
+# quando não há pipeline para o source. Loki (Go/logfmt) e o nginx do
+# loki-gateway escrevem em stderr, então logs de sucesso (level=info,
+# HTTP 2xx/3xx) chegam marcados como ERROR. Estes pipelines extraem o
+# nível/status real da mensagem e remapeiam o status do log.
+resource "datadog_logs_custom_pipeline" "loki_status" {
+  name       = "Loki - remap status from logfmt level"
+  is_enabled = true
+
+  filter {
+    query = "source:loki"
+  }
+
+  processor {
+    grok_parser {
+      name       = "Parse logfmt level"
+      is_enabled = true
+      source     = "message"
+      grok {
+        match_rules   = "loki_level_rule level=%%{word:level}"
+        support_rules = ""
+      }
+    }
+  }
+
+  processor {
+    status_remapper {
+      name       = "Remap status from level attribute"
+      is_enabled = true
+      sources    = ["level"]
+    }
+  }
+
+  depends_on = [helm_release.datadog, helm_release.loki]
+}
+
+resource "datadog_logs_custom_pipeline" "loki_gateway_nginx_status" {
+  name       = "Loki Gateway (nginx) - remap status from HTTP status code"
+  is_enabled = true
+
+  filter {
+    query = "source:nginx-unprivileged"
+  }
+
+  processor {
+    grok_parser {
+      name       = "Parse HTTP status code from access log"
+      is_enabled = true
+      source     = "message"
+      grok {
+        match_rules   = <<-EOT
+          nginx_access_rule \[%%{notSpace:timestamp}\] %%{number:http.status_code} "%%{word:http.method} %%{notSpace:http.url} HTTP/%%{notSpace:http.version}"
+        EOT
+        support_rules = ""
+      }
+    }
+  }
+
+  processor {
+    category_processor {
+      name       = "Categorize by HTTP status code"
+      is_enabled = true
+      target     = "nginx_status_category"
+
+      category {
+        name = "error"
+        filter {
+          query = "@http.status_code:[500 TO 599]"
+        }
+      }
+      category {
+        name = "warn"
+        filter {
+          query = "@http.status_code:[400 TO 499]"
+        }
+      }
+      category {
+        name = "info"
+        filter {
+          query = "@http.status_code:[100 TO 399]"
+        }
+      }
+    }
+  }
+
+  processor {
+    status_remapper {
+      name       = "Remap status from HTTP status category"
+      is_enabled = true
+      sources    = ["nginx_status_category"]
+    }
+  }
+
+  depends_on = [helm_release.datadog, helm_release.loki]
+}
+
 # Saída do Grafana LoadBalancer
 output "grafana_url" {
   description = "Grafana LoadBalancer hostname"
