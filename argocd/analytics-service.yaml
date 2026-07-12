@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/KauanCarvalho/fiap-dac-toggle-master-gitops.git
-    targetRevision: release-TC4-Guilherme
+    targetRevision: HEAD
     path: k8s/apps/analytics-service
   destination:
     server: https://kubernetes.default.svc
