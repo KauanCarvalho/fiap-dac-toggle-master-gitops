@@ -15,6 +15,8 @@ spec:
       labels:
         app: flag-service
     spec:
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: flag-service
           image: $IMAGE_URI
@@ -37,6 +39,10 @@ spec:
                 secretKeyRef:
                   name: flag-service-secret
                   key: DATABASE_URL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "datadog-agent.datadog.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "flag-service"
           resources:
             requests:
               cpu: "100m"
