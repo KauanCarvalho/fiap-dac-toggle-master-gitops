@@ -15,9 +15,11 @@ spec:
       labels:
         app: evaluation-service
     spec:
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: evaluation-service
-          image: 766401690140.dkr.ecr.us-east-1.amazonaws.com/togglemaster-evaluation:v1.0.0-49d9f69
+          image: 293229333149.dkr.ecr.us-east-1.amazonaws.com/togglemaster-evaluation:v1.0.0-1ce1dbd
           imagePullPolicy: Always
           ports:
             - containerPort: 8004
@@ -26,6 +28,11 @@ spec:
                 name: evaluation-service-config
             - secretRef:
                 name: evaluation-service-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "evaluation-service"
           resources:
             requests:
               cpu: "150m"

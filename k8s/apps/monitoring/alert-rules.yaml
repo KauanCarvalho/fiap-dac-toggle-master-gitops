@@ -1,0 +1,82 @@
+---
+# PrometheusRule — Alertas inteligentes para o ToggleMaster
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: togglemaster-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: togglemaster.http.errors
+      interval: 30s
+      rules:
+        # Alerta 1: Taxa de erros 5xx > 5% no auth-service
+        - alert: AuthServiceHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="auth-service", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{namespace="auth-service"}[5m]))
+            ) * 100 > 5
+          for: 2m
+          labels:
+            severity: critical
+            service: auth-service
+            namespace: auth-service
+          annotations:
+            summary: "Auth Service com alta taxa de erros 5xx"
+            description: "Taxa de erros 5xx no auth-service está acima de 5% há mais de 2 minutos. Valor atual: {{ $value | printf \"%.2f\" }}%"
+            runbook_url: "https://github.com/KauanCarvalho/fiap-dac-toggle-master/wiki/Runbook-AuthService"
+
+        # Alerta 2: Qualquer serviço com 0 pods disponíveis
+        - alert: ServiceUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{namespace=~"auth-service|flag-service|targeting-service|evaluation-service|analytics-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Serviço {{ $labels.deployment }} sem pods disponíveis"
+            description: "O deployment {{ $labels.deployment }} no namespace {{ $labels.namespace }} tem 0 replicas disponíveis."
+
+        # Alerta 3: Latência alta no evaluation-service (p95 > 2s)
+        - alert: EvaluationServiceHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace="evaluation-service"}[5m])) by (le)
+            ) > 2
+          for: 2m
+          labels:
+            severity: warning
+            service: evaluation-service
+            namespace: evaluation-service
+          annotations:
+            summary: "Evaluation Service com alta latência (p95)"
+            description: "P95 de latência do evaluation-service está acima de 2 segundos. Valor atual: {{ $value | printf \"%.2f\" }}s"
+
+    - name: togglemaster.resources
+      interval: 60s
+      rules:
+        # Alerta 4: Uso de CPU acima de 80% nos nodes
+        - alert: NodeHighCPU
+          expr: |
+            (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (node)) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CPU alta no node {{ $labels.node }}"
+            description: "Node {{ $labels.node }} está com {{ $value | printf \"%.0f\" }}% de CPU."
+
+        # Alerta 5: Memória disponível < 20%
+        - alert: NodeLowMemory
+          expr: |
+            (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Memória baixa no node {{ $labels.instance }}"
+            description: "Node {{ $labels.instance }} tem apenas {{ $value | printf \"%.0f\" }}% de memória disponível."

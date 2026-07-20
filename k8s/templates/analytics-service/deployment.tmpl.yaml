@@ -15,6 +15,8 @@ spec:
       labels:
         app: analytics-service
     spec:
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: analytics-service
           image: $IMAGE_URI
@@ -26,6 +28,11 @@ spec:
                 name: analytics-service-config
             - secretRef:
                 name: analytics-service-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "analytics-service"
           resources:
             requests:
               cpu: "100m"

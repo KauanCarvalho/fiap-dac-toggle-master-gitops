@@ -15,9 +15,11 @@ spec:
       labels:
         app: analytics-service
     spec:
+      imagePullSecrets:
+      - name: ecr-pull-secret
       containers:
         - name: analytics-service
-          image: 766401690140.dkr.ecr.us-east-1.amazonaws.com/togglemaster-analytics:v1.0.0-49d9f69
+          image: 293229333149.dkr.ecr.us-east-1.amazonaws.com/togglemaster-analytics:v1.0.0-1ce1dbd
           imagePullPolicy: Always
           ports:
             - containerPort: 8005
@@ -26,6 +28,11 @@ spec:
                 name: analytics-service-config
             - secretRef:
                 name: analytics-service-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "analytics-service"
           resources:
             requests:
               cpu: "100m"

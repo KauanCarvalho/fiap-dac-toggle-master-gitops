@@ -11,6 +11,8 @@ spec:
   rules:
     - http:
         paths:
+          # auth-service routes (/health, /validate, /admin/keys) don't
+          # include an "/auth" prefix internally, so it must be stripped.
           - path: /auth(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -18,13 +20,8 @@ spec:
                 name: auth-service
                 port:
                   number: 80
-          - path: /flags(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: flag-service-ext
-                port:
-                  number: 80
+          # targeting-service routes are /rules(/*), so stripping the
+          # "/targeting" prefix lines up correctly.
           - path: /targeting(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
@@ -32,15 +29,37 @@ spec:
                 name: targeting-service-ext
                 port:
                   number: 80
-          - path: /evaluate(/|$)(.*)
-            pathType: ImplementationSpecific
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: toggle-master-ingress-passthrough
+  namespace: auth-service
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # flag-service routes are literally /flags and /flags/<name>,
+          # so the prefix must NOT be stripped.
+          - path: /flags
+            pathType: Prefix
+            backend:
+              service:
+                name: flag-service-ext
+                port:
+                  number: 80
+          # evaluation-service's whole route is exactly /evaluate,
+          # so the prefix must NOT be stripped.
+          - path: /evaluate
+            pathType: Prefix
             backend:
               service:
                 name: evaluation-service-ext
                 port:
                   number: 80
-          - path: /analytics(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /analytics
+            pathType: Prefix
             backend:
               service:
                 name: analytics-service-ext

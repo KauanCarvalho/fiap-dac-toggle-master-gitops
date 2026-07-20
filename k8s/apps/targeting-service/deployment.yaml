@@ -15,9 +15,11 @@ spec:
       labels:
         app: targeting-service
     spec:
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: targeting-service
-          image: 766401690140.dkr.ecr.us-east-1.amazonaws.com/togglemaster-targeting:v1.0.0-49d9f69
+          image: 293229333149.dkr.ecr.us-east-1.amazonaws.com/togglemaster-targeting:v1.0.0-1ce1dbd
           imagePullPolicy: Always
           ports:
             - containerPort: 8003
@@ -37,6 +39,10 @@ spec:
                 secretKeyRef:
                   name: targeting-service-secret
                   key: DATABASE_URL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "targeting-service"
           resources:
             requests:
               cpu: "100m"
