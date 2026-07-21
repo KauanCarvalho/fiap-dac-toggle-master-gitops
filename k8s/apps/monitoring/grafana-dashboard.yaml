@@ -90,8 +90,8 @@ data:
           "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
           "targets": [
             {
-              "expr": "(1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])) by (node)) * 100",
-              "legendFormat": "{{node}}"
+              "expr": "(1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])) by (instance)) * 100",
+              "legendFormat": "{{instance}}"
             }
           ],
           "fieldConfig": {"defaults": {"unit": "percent"}}
