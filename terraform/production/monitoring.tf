@@ -103,6 +103,7 @@ resource "helm_release" "kube_prometheus_stack" {
       additionalDataSources:
         - name: Loki
           type: loki
+          uid: loki
           url: http://loki:3100
           access: proxy
           isDefault: false
