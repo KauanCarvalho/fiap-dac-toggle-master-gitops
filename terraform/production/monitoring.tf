@@ -30,9 +30,14 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
           - matchers:
               - alertname =~ ".*"
             receiver: 'discord'
+            continue: true
           - matchers:
               - alertname =~ ".*"
             receiver: 'pagerduty'
+            continue: true
+          - matchers:
+              - alertname =~ "AuthServiceHighErrorRate|ServiceUnavailable|EvaluationServiceHighLatency"
+            receiver: 'self_healing'
 
       receivers:
         - name: 'discord'
@@ -57,10 +62,18 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
                 namespace: '{{ .CommonLabels.namespace }}'
                 service: '{{ .CommonLabels.service }}'
                 severity: '{{ .CommonLabels.severity }}'
+
+        - name: 'self_healing'
+          webhook_configs:
+            - url: "${aws_lambda_function_url.self_healing.function_url}?token=${var.self_healing_webhook_token}"
+              send_resolved: false
     EOT
   }
 
-  depends_on = [kubernetes_namespace_v1.monitoring]
+  depends_on = [
+    kubernetes_namespace_v1.monitoring,
+    aws_lambda_function_url.self_healing,
+  ]
 }
 
 # ----- kube-prometheus-stack (Prometheus + Grafana + AlertManager) -----

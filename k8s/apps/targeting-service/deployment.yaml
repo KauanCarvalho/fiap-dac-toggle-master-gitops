@@ -43,6 +43,10 @@ spec:
               value: "otel-collector.monitoring.svc.cluster.local:4317"
             - name: OTEL_SERVICE_NAME
               value: "targeting-service"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "namespace=targeting-service"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
           resources:
             requests:
               cpu: "100m"
