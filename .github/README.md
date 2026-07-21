@@ -1,4 +1,4 @@
-# TECH CHALLENGE - FASE 3: Automação e GitOps ToggleMaster
+# TECH CHALLENGE - FASE 4: Observabilidade, APM e Self-Healing (ToggleMaster)
 
 Turma: **2DCLT** — DevOps e Arquitetura Cloud Pós Tech.
 
@@ -12,15 +12,15 @@ Turma: **2DCLT** — DevOps e Arquitetura Cloud Pós Tech.
 
 ## Documentação de Vídeo
 
-O vídeo técnico detalha o provisionamento via Terraform, a falha proposital na pipeline de segurança e o processo de sincronização do ArgoCD.
+O vídeo técnico detalha a stack de observabilidade (Prometheus, Loki, Grafana, OTel Collector), o APM (Datadog), os alertas inteligentes e a automação de Self-Healing em resposta a um incidente real.
 
-- [Link da Demonstração (YouTube)](https://www.youtube.com/watch?v=UXEEftRU1LE) 
+- Link da Demonstração (YouTube): _[PREENCHER]_
 
 ---
 
 ## 1. Introdução
 
-Este projeto contempla a automação completa da infraestrutura e dos processos de entrega contínua (CI/CD) para o ecossistema de microsserviços ToggleMaster (Auth, Flag, Targeting, Evaluation e Analytics). A solução adota práticas avançadas de Infraestrutura como Código (IaC) com Terraform, Segurança (DevSecOps) e Entrega baseada em GitOps com ArgoCD.
+Este projeto contempla a automação completa da infraestrutura e dos processos de entrega contínua (CI/CD) para o ecossistema de microsserviços ToggleMaster (Auth, Flag, Targeting, Evaluation e Analytics), com Infraestrutura como Código (IaC) via Terraform, Segurança (DevSecOps) e Entrega baseada em GitOps com ArgoCD. A **Fase 4** adiciona, sobre essa base, uma stack completa de observabilidade (Prometheus, Loki, Grafana), padronização de telemetria com OpenTelemetry, um APM comercial (Datadog) e automação de resposta a incidentes (Alertmanager → PagerDuty/Discord → Self-Healing via GitHub Actions).
 
 ## 2. Estrutura do Repositório
 
@@ -30,9 +30,10 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
 │   ├── README.md
 │   └── workflows/
 │       ├── terraform-bootstrap.yml   # Cria S3 + DynamoDB para o estado remoto
-│       └── terraform-production.yml  # Provisiona VPC, EKS, RDS ×3, ElastiCache, DynamoDB, SQS, ECR ×5, ArgoCD, Ingress Nginx, ESO, Secrets Manager
+│       └── terraform-production.yml  # Provisiona VPC, EKS, RDS ×3, ElastiCache, DynamoDB, SQS, ECR ×5, ArgoCD, Ingress Nginx, ESO, Secrets Manager, monitoring, self-healing bridge
 ├── argocd/
 │   ├── core-infra.yaml               # App ArgoCD para recursos base do cluster
+│   ├── monitoring.yaml               # App ArgoCD para a stack de observabilidade (Fase 4)
 │   ├── auth-service.yaml
 │   ├── flag-service.yaml
 │   ├── targeting-service.yaml
@@ -43,15 +44,16 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
 │   │   ├── 00-namespaces.yaml
 │   │   ├── cluster-secret-store.yaml
 │   │   ├── ingress.yaml
+│   │   ├── monitoring/               # Dashboard customizado + PrometheusRule (Fase 4)
 │   │   └── <service>/                # deployment, service, configmap, hpa, external-secret
 │   └── templates/                    # Templates usados pelo CI para atualizar tags de imagem
 └── terraform/
     ├── bootstrap/                    # Estado remoto: S3 + DynamoDB lock
     ├── modules/aws/                  # Módulos reutilizáveis: vpc, eks, rds, ecr, sqs, etc.
-    └── production/                   # Orquestração principal da infra + Helm (ArgoCD, ESO, Ingress)
+    └── production/                   # Orquestração principal: infra + Helm (ArgoCD, ESO, Ingress) + monitoring.tf + self-healing.tf (Fase 4)
 ```
 
-> As pipelines de CI/DevSecOps (Build, Lint, SAST/SCA, Docker, ECR) residem nos repositórios individuais de cada microsserviço em [fiap-dac-toggle-master](https://github.com/KauanCarvalho/fiap-dac-toggle-master). Este repositório é exclusivamente o **repositório de GitOps**: manifestos Kubernetes, definições ArgoCD e Terraform de infraestrutura.
+> As pipelines de CI/DevSecOps (Build, Lint, SAST/SCA, Docker, ECR) e a instrumentação de código (OpenTelemetry) residem nos repositórios individuais de cada microsserviço em [fiap-dac-toggle-master](https://github.com/KauanCarvalho/fiap-dac-toggle-master). Este repositório é exclusivamente o **repositório de GitOps**: manifestos Kubernetes, definições ArgoCD, Terraform de infraestrutura e a stack de observabilidade.
 
 ---
 
@@ -79,7 +81,8 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
 │                    ESTE REPOSITÓRIO (GitOps)                            │
 │          github.com/KauanCarvalho/fiap-dac-toggle-master-gitops         │
 │                                                                         │
-│  ├── terraform/       → IaC (VPC, EKS, RDS, Redis, DynamoDB, SQS, ECR)  │
+│  ├── terraform/       → IaC (VPC, EKS, RDS, Redis, DynamoDB, SQS, ECR,  │
+│  │                       monitoring.tf, self-healing.tf)                │
 │  ├── k8s/apps/        → Manifestos Kubernetes (fonte de verdade)        │
 │  │   └── <service>/deployment.yaml  ← tag atualizada pelo CI            │
 │  └── argocd/          → ArgoCD Application definitions                  │
@@ -95,12 +98,16 @@ Este projeto contempla a automação completa da infraestrutura e dos processos 
 │  5 Microsserviços: auth · flag · targeting · evaluation · analytics     │
 │  External Secrets Operator → AWS Secrets Manager (sem credenciais em    │
 │  texto plano)                                                           │
+│                                                                         │
+│  Stack de Observabilidade (Fase 4): OTel Collector (DaemonSet) →        │
+│  Prometheus + Loki + Datadog Agent → Grafana Dashboard                  │
+│  Alertmanager → Discord + PagerDuty + Lambda (Self-Healing bridge)      │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Requisitos Técnicos Implementados
+## 4. Requisitos Técnicos Implementados (Fase 3 — base)
 
 ### 4.1. Infraestrutura como Código (Terraform)
 
@@ -134,8 +141,8 @@ As pipelines de Integração Contínua (GitHub Actions) foram configuradas nos r
 
 ### 4.3. Entrega Contínua e GitOps (CD)
 
-O deploy das aplicações não é mais realizado via Push direto, mas sim via **Pull/GitOps**:
-- **ArgoCD**: Instalado via Helm Provider no Terraform, gerenciando o ciclo de vida dos 5 microsserviços no cluster EKS. A aplicação `core-infra` é sincronizada primeiro e instala os recursos base (namespaces, ClusterSecretStore, Ingress). Em seguida, cada microsserviço possui seu próprio objeto `Application` ArgoCD com `selfHeal: true` e `prune: true`.
+O deploy das aplicações não é realizado via Push direto, mas sim via **Pull/GitOps**:
+- **ArgoCD**: Instalado via Helm Provider no Terraform, gerenciando o ciclo de vida dos 5 microsserviços e da stack de monitoramento no cluster EKS. A aplicação `core-infra` é sincronizada primeiro e instala os recursos base (namespaces, ClusterSecretStore, Ingress). Em seguida, cada microsserviço e a aplicação `monitoring` possuem seu próprio objeto `Application` ArgoCD com `selfHeal: true` e `prune: true`.
 - **Atualização de Imagens**: O workflow de CI atualiza dinamicamente as tags de imagem nos manifestos `k8s/apps/<service>/deployment.yaml` deste repositório GitOps via commit automatizado. Os arquivos `k8s/templates/` servem como base para geração desses manifests com a nova tag.
 - **External Secrets**: Sincronização automática de segredos do AWS Secrets Manager para o cluster via `ClusterSecretStore`, sem intervenção manual.
 
@@ -143,11 +150,14 @@ O deploy das aplicações não é mais realizado via Push direto, mas sim via **
 
 ## 5. Configuração de Variáveis (GitHub Secrets)
 
-Configure as seguintes **8 chaves** no seu repositório (**Settings > Secrets and variables > Actions**):
+Configure as seguintes chaves no seu repositório (**Settings > Secrets and variables > Actions**):
 
 - **Credenciais AWS Academy**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`
 - **Bancos de Dados (RDS)**: `DB_PASSWORD_AUTH`, `DB_PASSWORD_FLAG`, `DB_PASSWORD_TARGETING`
 - **Segurança (Apps)**: `AUTH_MASTER_KEY`, `EVAL_API_KEY`
+- **APM (Fase 4)**: `DATADOG_API_KEY`, `DATADOG_APP_KEY`
+- **ChatOps / Incident Management (Fase 4)**: `DISCORD_WEBHOOK_URL`, `PAGERDUTY_INTEGRATION_KEY`
+- **Self-Healing (Fase 4)**: `GH_DISPATCH_TOKEN` (GitHub PAT com permissão sobre o endpoint `dispatches` do repo de aplicação), `SELF_HEALING_WEBHOOK_TOKEN` (token aleatório para autenticar o webhook do Alertmanager na Lambda)
 
 ---
 
@@ -161,7 +171,7 @@ Execute o workflow de **Terraform Bootstrap** no GitHub Actions. Este passo cria
 
 ### Passo 2: Provisionamento da Infraestrutura AWS (Terraform Production)
 
-Execute o workflow de **Terraform Production**. Este passo provisionará todos os serviços gerenciados (EKS, RDS, Redis, DynamoDB, SQS, ECR).
+Execute o workflow de **Terraform Production**. Este passo provisionará todos os serviços gerenciados (EKS, RDS, Redis, DynamoDB, SQS, ECR, a stack de monitoramento e a bridge de self-healing).
 
 ### Passo 3: Configuração de Credenciais Locais (AWS Academy)
 
@@ -220,7 +230,9 @@ Acesse a URL obtida no passo 1 (usuário `admin`), e então aplique os manifesto
 kubectl apply -f argocd/
 ```
 
-No painel do ArgoCD, realize a sincronização do aplicativo `core-infra` antes de proceder com a sincronização dos microsserviços individuais.
+No painel do ArgoCD, realize a sincronização do aplicativo `core-infra` antes de proceder com a sincronização da `monitoring` e dos microsserviços individuais.
+
+> As evidências visuais (cluster/ArgoCD, dashboard, traces, alertas, self-healing) estão documentadas no README do repositório de aplicação: [fiap-dac-toggle-master](https://github.com/KauanCarvalho/fiap-dac-toggle-master#readme).
 
 ---
 
@@ -287,20 +299,64 @@ Após a sincronização, os serviços podem ser validados através dos endereço
 - **Analytics Service**: `http://<LB_DNS>/analytics/health` -> `{"status":"ok"}`
 - **Targeting Service**: `http://<LB_DNS>/targeting/health` -> `{"status":"ok"}`
 
-## 9. Validação de Integridade do Cluster
-
 Para confirmar que o cluster está operando corretamente, no repositório de origem das aplicações existe um script que valida todas as chamadas possíveis e mapeadas. Ela se baseia em envs presentes no `.env.prod` que se originam de um `.env.prod.sample` altere para as _envs_ e sucesso!
 
 ```bash
 make check-all ENV=prod
 ```
 
-### Evidência de Operação - Cluster Status
+---
 
-![ToggleMaster Cluster Status](https://github.com/user-attachments/assets/052eee61-a3f6-4133-a131-b1dd6386e160)
+## 9. Fase 4 — Observabilidade, APM e Self-Healing
+
+Toda a stack abaixo foi adicionada em `terraform/production/monitoring.tf` (e `self-healing.tf`), provisionada via `helm_release`/recursos AWS e orquestrada pelo ArgoCD App `monitoring` (`argocd/monitoring.yaml`).
+
+### 9.1. Monitoramento Opensource (Métricas e Logs)
+
+| Componente | Chart | Função |
+| :--- | :--- | :--- |
+| **kube-prometheus-stack** | `prometheus-community/kube-prometheus-stack` | Prometheus (métricas) + Grafana (visualização) + AlertManager (roteamento de alertas). Grafana exposto via `LoadBalancer`. |
+| **Loki** | `grafana/loki` (SingleBinary, filesystem) | Centralização e indexação de logs de todos os pods do cluster. |
+
+Dashboard customizado provisionado via ConfigMap (`k8s/apps/monitoring/grafana-dashboard.yaml`), carregado automaticamente pelo sidecar do Grafana, com painéis de: pods running por serviço, taxa de requisições, taxa de erro 5xx, CPU/memória por node, latência p95 por serviço e logs em tempo real (Loki).
+
+### 9.2. OpenTelemetry Collector
+
+DaemonSet `opentelemetry-collector` (chart oficial `open-telemetry/opentelemetry-helm-charts`) atuando como peça central de roteamento de telemetria — os microsserviços enviam OTLP (gRPC/HTTP) para o Collector, que distribui:
+
+- **traces** → Datadog (`otlp/datadog` exporter)
+- **metrics** → Prometheus (`prometheusremotewrite`, com `enableRemoteWriteReceiver` habilitado no Prometheus, e `resource_to_telemetry_conversion` habilitado para preservar o atributo `namespace` de cada serviço como label)
+- **logs** → Loki (via `filelog` receiver, que já extrai `k8s.namespace.name`/`k8s.pod.name` do caminho do arquivo; um processor de `resource` unifica esse atributo com o `namespace` usado pelas apps via OTLP, e a hint `loki.resource.labels` promove os atributos certos a labels do Loki)
+
+Promtail não é usado — a coleta de logs é feita pelo próprio OTel Collector.
+
+### 9.3. APM — Datadog
+
+Datadog Agent (chart `datadoghq/datadog`) com OTLP receiver habilitado (porta 4317), APM e coleta de logs (`containerCollectAll`) ativos. Pipelines de log customizados corrigem falsos-positivos de status `ERROR` em logs do Loki e do nginx do `loki-gateway`, que escrevem por padrão em stderr. Um atributo `deployment.environment: production` é injetado no OTel Collector para que o Datadog associe corretamente os traces ao ambiente (necessário para o Service Map funcionar).
+
+### 9.4. Alertas, ChatOps e Incident Management
+
+- **Regras de alerta** (`k8s/apps/monitoring/alert-rules.yaml`): taxa de erro 5xx do auth-service > 5%, serviço sem pods disponíveis, latência p95 do evaluation-service > 2s, CPU de node > 80%, memória de node < 20%.
+- **AlertManager** roteia cada alerta para até três receivers em paralelo: **Discord** (via `slack_configs`, aproveitando o modo de compatibilidade Slack do webhook do Discord — sufixo `/slack` na URL, já que `webhook_configs` genérico não suporta os campos `title`/`text` usados no template), **PagerDuty** (abertura de incidente via `routing_key`) e **Self-Healing** para os alertas críticos de disponibilidade/latência. Configuração injetada dinamicamente por Terraform (`kubernetes_secret_v1.alertmanager_config`), evitando hardcode de credenciais no manifesto.
+
+### 9.5. Self-Healing
+
+A automação de mitigação (rollout restart automático) vive no repositório de aplicação, em `.github/workflows/self-healing.yml`. A ponte entre o AlertManager e o `repository_dispatch` do GitHub Actions é uma AWS Lambda (`terraform/production/self-healing.tf`), exposta via **API Gateway (HTTP API)** na frente da Lambda — a conta AWS Academy bloqueia invocação anônima de Lambda Function URL diretamente (`lambda:InvokeFunctionUrl`), então o API Gateway (que invoca via `lambda:InvokeFunction`) contorna essa restrição.
+
+### 9.6. Variáveis sensíveis (Terraform)
+
+Injetadas via `terraform.tfvars.secret` (não versionado) ou via GitHub Secrets no workflow: `datadog_api_key`, `datadog_app_key`, `discord_webhook_url`, `pagerduty_integration_key`, `github_dispatch_token`, `self_healing_webhook_token`.
+
+### 9.7. Acesso rápido
+
+| Ferramenta | Como acessar |
+| :--- | :--- |
+| **Grafana** | `terraform output -raw grafana_url` (LoadBalancer público) — login `admin` / senha definida em `monitoring.tf`. |
+| **Prometheus** | `kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090` (ClusterIP, sem exposição externa). |
+| **Loki** | Sem UI própria — consultar via datasource do Grafana (Explore) ou `kubectl port-forward -n monitoring svc/loki-gateway 3100:80`. |
 
 ---
 
 ## 10. Considerações Finais
 
-Toda a infraestrutura descrita foi projetada sob o princípio de imutabilidade. Conflitos de versão foram eliminados através da centralização no repositório de GitOps, e a segurança foi reforçada com a injeção dinâmica de segredos via AWS Secrets Manager, atendendo integralmente aos requisitos da Fase 3 do Tech Challenge.
+Toda a infraestrutura descrita foi projetada sob o princípio de imutabilidade. Conflitos de versão foram eliminados através da centralização no repositório de GitOps, e a segurança foi reforçada com a injeção dinâmica de segredos via AWS Secrets Manager, atendendo integralmente aos requisitos da Fase 3 do Tech Challenge. Sobre essa base, a Fase 4 adicionou observabilidade total (métricas, logs e traces centralizados via OpenTelemetry), um APM comercial integrado (Datadog) e uma automação de resposta a incidentes de ponta a ponta — do alerta disparando no Prometheus até o `kubectl rollout restart` executado automaticamente pelo GitHub Actions, sem intervenção humana.
