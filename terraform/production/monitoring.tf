@@ -239,6 +239,9 @@ resource "helm_release" "otel_collector" {
             - action: insert
               key: cluster
               value: togglemaster-cluster
+            - action: insert
+              key: loki.resource.labels
+              value: "namespace,cluster,service.name"
 
       exporters:
         prometheusremotewrite:
