@@ -52,6 +52,17 @@ resource "aws_lambda_function_url" "self_healing" {
   authorization_type = "NONE"
 }
 
+# authorization_type = "NONE" só desabilita a exigência de assinatura IAM na
+# própria Function URL — sem esta permissão de recurso, qualquer chamada
+# (inclusive do Alertmanager) recebe 403 Forbidden.
+resource "aws_lambda_permission" "self_healing_url_public" {
+  statement_id           = "AllowPublicFunctionUrlInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.self_healing.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
 output "self_healing_webhook_url" {
   description = "URL do bridge de self-healing (sem o token — ver var.self_healing_webhook_token)"
   value       = aws_lambda_function_url.self_healing.function_url
