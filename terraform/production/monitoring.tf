@@ -239,6 +239,12 @@ resource "helm_release" "otel_collector" {
             - action: insert
               key: cluster
               value: togglemaster-cluster
+            # Datadog deriva a tag "env" (usada para filtrar o Service Map e
+            # o APM) do atributo semconv deployment.environment. Sem isso, os
+            # traces chegam com env:none e o Service Map some/fica vazio.
+            - action: insert
+              key: deployment.environment
+              value: production
             # O receiver filelog (parser "container") já extrai k8s.namespace.name
             # a partir do caminho do arquivo de log dos containers; copiamos para
             # "namespace" para unificar com o atributo que as apps já enviam via
