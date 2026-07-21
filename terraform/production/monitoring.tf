@@ -239,6 +239,14 @@ resource "helm_release" "otel_collector" {
             - action: insert
               key: cluster
               value: togglemaster-cluster
+            # O receiver filelog (parser "container") já extrai k8s.namespace.name
+            # a partir do caminho do arquivo de log dos containers; copiamos para
+            # "namespace" para unificar com o atributo que as apps já enviam via
+            # OTLP (OTEL_RESOURCE_ATTRIBUTES), usado pelo dashboard e pelas regras
+            # de alerta. O "insert" não sobrescreve se "namespace" já existir.
+            - action: insert
+              key: namespace
+              from_attribute: k8s.namespace.name
             - action: insert
               key: loki.resource.labels
               value: "namespace,cluster,service.name"
