@@ -6,6 +6,13 @@ resource "kubernetes_namespace_v1" "monitoring" {
   depends_on = [module.eks]
 }
 
+# O webhook do Discord aceita o payload do Slack através do sufixo
+# "/slack" na URL. "title"/"text" só existem no schema do slack_configs
+# do Alertmanager (webhook_configs genérico não tem esses campos).
+locals {
+  discord_slack_webhook_url = can(regex("/slack/?$", var.discord_webhook_url)) ? var.discord_webhook_url : "${var.discord_webhook_url}/slack"
+}
+
 # ----- AlertManager Config Secret (Injeção dinâmica de Webhook e Chaves) -----
 resource "kubernetes_secret_v1" "alertmanager_config" {
   metadata {
@@ -41,8 +48,8 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
 
       receivers:
         - name: 'discord'
-          webhook_configs:
-            - url: "${var.discord_webhook_url}"
+          slack_configs:
+            - api_url: "${local.discord_slack_webhook_url}"
               send_resolved: true
               title: '{{ if eq .Status "firing" }}🔥 ALERTA DISPARADO{{ else }}✅ RESOLVIDO{{ end }}'
               text: |
