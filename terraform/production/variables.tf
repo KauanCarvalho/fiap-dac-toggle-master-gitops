@@ -81,3 +81,15 @@ variable "pagerduty_integration_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "github_dispatch_token" {
+  description = "GitHub PAT (repo scope, ou fine-grained com Contents: read/write) usado pela Lambda de self-healing para chamar o endpoint repository_dispatch do fiap-dac-toggle-master"
+  type        = string
+  sensitive   = true
+}
+
+variable "self_healing_webhook_token" {
+  description = "Token compartilhado (gerado manualmente, ex.: openssl rand -hex 32) para validar que a chamada ao webhook de self-healing veio do Alertmanager"
+  type        = string
+  sensitive   = true
+}

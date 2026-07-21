@@ -14,6 +14,10 @@ terraform {
       source  = "DataDog/datadog"
       version = "~> 3.55"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 
   backend "s3" {}
