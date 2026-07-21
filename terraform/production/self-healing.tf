@@ -9,27 +9,12 @@ data "archive_file" "self_healing_lambda" {
   output_path = "${path.module}/lambda/self-healing/main.zip"
 }
 
-resource "aws_iam_role" "self_healing_lambda" {
-  name = "togglemaster-self-healing-lambda"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "self_healing_lambda_logs" {
-  role       = aws_iam_role.self_healing_lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
+# Contas do AWS Academy (Learner Lab) não permitem iam:CreateRole /
+# iam:AttachRolePolicy — reaproveita a mesma "LabRole" já usada pelo
+# módulo EKS em main.tf (única role com permissão disponível na conta).
 resource "aws_lambda_function" "self_healing" {
   function_name    = "togglemaster-self-healing-bridge"
-  role             = aws_iam_role.self_healing_lambda.arn
+  role             = data.aws_iam_role.lab_role.arn
   handler          = "main.handler"
   runtime          = "python3.12"
   timeout          = 15
@@ -43,8 +28,6 @@ resource "aws_lambda_function" "self_healing" {
       WEBHOOK_TOKEN = var.self_healing_webhook_token
     }
   }
-
-  depends_on = [aws_iam_role_policy_attachment.self_healing_lambda_logs]
 }
 
 resource "aws_lambda_function_url" "self_healing" {
