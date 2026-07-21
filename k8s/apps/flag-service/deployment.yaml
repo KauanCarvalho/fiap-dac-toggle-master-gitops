@@ -41,6 +41,8 @@ spec:
                   key: DATABASE_URL
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: OTEL_SERVICE_NAME
               value: "flag-service"
             - name: OTEL_RESOURCE_ATTRIBUTES
