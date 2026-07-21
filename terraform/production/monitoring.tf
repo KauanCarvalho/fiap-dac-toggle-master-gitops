@@ -243,6 +243,8 @@ resource "helm_release" "otel_collector" {
       exporters:
         prometheusremotewrite:
           endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+          resource_to_telemetry_conversion:
+            enabled: true
         loki:
           endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         otlp/datadog:
