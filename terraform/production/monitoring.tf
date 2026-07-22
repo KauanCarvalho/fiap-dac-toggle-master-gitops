@@ -32,14 +32,14 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
         group_wait: 30s
         group_interval: 5m
         repeat_interval: 1h
-        receiver: 'discord'
+        receiver: 'null'
         routes:
           - matchers:
-              - alertname =~ ".*"
+              - alertname =~ "AuthServiceHighErrorRate|ServiceUnavailable|EvaluationServiceHighLatency|NodeHighCPU|NodeLowMemory"
             receiver: 'discord'
             continue: true
           - matchers:
-              - alertname =~ ".*"
+              - alertname =~ "AuthServiceHighErrorRate|ServiceUnavailable|EvaluationServiceHighLatency|NodeHighCPU|NodeLowMemory"
             receiver: 'pagerduty'
             continue: true
           - matchers:
@@ -47,6 +47,12 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
             receiver: 'self_healing'
 
       receivers:
+        # Alertas padrão do kube-prometheus-stack (InfoInhibitor, Watchdog,
+        # TargetDown, etc.) não são nossos 5 alertas customizados e caem
+        # aqui, num receiver sem integrações — evita "alert fatigue"
+        # notificando Discord/PagerDuty com ruído irrelevante à demo.
+        - name: 'null'
+
         - name: 'discord'
           slack_configs:
             - api_url: "${local.discord_slack_webhook_url}"
