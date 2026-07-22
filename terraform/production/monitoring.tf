@@ -78,14 +78,14 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
 
         - name: 'self_healing'
           webhook_configs:
-            - url: "${aws_lambda_function_url.self_healing.function_url}?token=${var.self_healing_webhook_token}"
+            - url: "${aws_apigatewayv2_api.self_healing.api_endpoint}?token=${var.self_healing_webhook_token}"
               send_resolved: false
     EOT
   }
 
   depends_on = [
     kubernetes_namespace_v1.monitoring,
-    aws_lambda_function_url.self_healing,
+    aws_apigatewayv2_api.self_healing,
   ]
 }
 
