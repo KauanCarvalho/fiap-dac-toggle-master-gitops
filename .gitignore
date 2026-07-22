@@ -15,7 +15,11 @@ crash.*.log
 # Overrides for variables (should be kept local only)
 *.tfvars
 *.tfvars.json
+*.tfvars.secret
 
 # Ignore CLI configuration files if any
 **/.terraformrc
 terraform.rc
+
+# Lambda build artifacts (zipped by terraform's archive_file data source)
+**/lambda/**/*.zip

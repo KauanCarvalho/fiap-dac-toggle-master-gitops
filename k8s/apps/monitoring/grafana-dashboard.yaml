@@ -62,7 +62,7 @@ data:
           "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
           "targets": [
             {
-              "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (namespace) / sum(rate(http_requests_total[5m])) by (namespace)) * 100",
+              "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (namespace) or sum(rate(http_requests_total[5m])) by (namespace) * 0) / sum(rate(http_requests_total[5m])) by (namespace) * 100",
               "legendFormat": "{{namespace}}"
             }
           ],
@@ -90,8 +90,8 @@ data:
           "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
           "targets": [
             {
-              "expr": "(1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])) by (node)) * 100",
-              "legendFormat": "{{node}}"
+              "expr": "(1 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m])) by (instance)) * 100",
+              "legendFormat": "{{instance}}"
             }
           ],
           "fieldConfig": {"defaults": {"unit": "percent"}}

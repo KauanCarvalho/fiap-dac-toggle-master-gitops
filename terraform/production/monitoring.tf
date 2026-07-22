@@ -6,6 +6,13 @@ resource "kubernetes_namespace_v1" "monitoring" {
   depends_on = [module.eks]
 }
 
+# O webhook do Discord aceita o payload do Slack através do sufixo
+# "/slack" na URL. "title"/"text" só existem no schema do slack_configs
+# do Alertmanager (webhook_configs genérico não tem esses campos).
+locals {
+  discord_slack_webhook_url = can(regex("/slack/?$", var.discord_webhook_url)) ? var.discord_webhook_url : "${var.discord_webhook_url}/slack"
+}
+
 # ----- AlertManager Config Secret (Injeção dinâmica de Webhook e Chaves) -----
 resource "kubernetes_secret_v1" "alertmanager_config" {
   metadata {
@@ -25,14 +32,14 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
         group_wait: 30s
         group_interval: 5m
         repeat_interval: 1h
-        receiver: 'discord'
+        receiver: 'null'
         routes:
           - matchers:
-              - alertname =~ ".*"
+              - alertname =~ "AuthServiceHighErrorRate|ServiceUnavailable|EvaluationServiceHighLatency|NodeHighCPU|NodeLowMemory"
             receiver: 'discord'
             continue: true
           - matchers:
-              - alertname =~ ".*"
+              - alertname =~ "AuthServiceHighErrorRate|ServiceUnavailable|EvaluationServiceHighLatency|NodeHighCPU|NodeLowMemory"
             receiver: 'pagerduty'
             continue: true
           - matchers:
@@ -40,9 +47,15 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
             receiver: 'self_healing'
 
       receivers:
+        # Alertas padrão do kube-prometheus-stack (InfoInhibitor, Watchdog,
+        # TargetDown, etc.) não são nossos 5 alertas customizados e caem
+        # aqui, num receiver sem integrações — evita "alert fatigue"
+        # notificando Discord/PagerDuty com ruído irrelevante à demo.
+        - name: 'null'
+
         - name: 'discord'
-          webhook_configs:
-            - url: "${var.discord_webhook_url}"
+          slack_configs:
+            - api_url: "${local.discord_slack_webhook_url}"
               send_resolved: true
               title: '{{ if eq .Status "firing" }}🔥 ALERTA DISPARADO{{ else }}✅ RESOLVIDO{{ end }}'
               text: |
@@ -65,14 +78,14 @@ resource "kubernetes_secret_v1" "alertmanager_config" {
 
         - name: 'self_healing'
           webhook_configs:
-            - url: "${aws_lambda_function_url.self_healing.function_url}?token=${var.self_healing_webhook_token}"
+            - url: "${aws_apigatewayv2_api.self_healing.api_endpoint}?token=${var.self_healing_webhook_token}"
               send_resolved: false
     EOT
   }
 
   depends_on = [
     kubernetes_namespace_v1.monitoring,
-    aws_lambda_function_url.self_healing,
+    aws_apigatewayv2_api.self_healing,
   ]
 }
 
@@ -103,6 +116,7 @@ resource "helm_release" "kube_prometheus_stack" {
       additionalDataSources:
         - name: Loki
           type: loki
+          uid: loki
           url: http://loki:3100
           access: proxy
           isDefault: false
@@ -238,10 +252,29 @@ resource "helm_release" "otel_collector" {
             - action: insert
               key: cluster
               value: togglemaster-cluster
+            # Datadog deriva a tag "env" (usada para filtrar o Service Map e
+            # o APM) do atributo semconv deployment.environment. Sem isso, os
+            # traces chegam com env:none e o Service Map some/fica vazio.
+            - action: insert
+              key: deployment.environment
+              value: production
+            # O receiver filelog (parser "container") já extrai k8s.namespace.name
+            # a partir do caminho do arquivo de log dos containers; copiamos para
+            # "namespace" para unificar com o atributo que as apps já enviam via
+            # OTLP (OTEL_RESOURCE_ATTRIBUTES), usado pelo dashboard e pelas regras
+            # de alerta. O "insert" não sobrescreve se "namespace" já existir.
+            - action: insert
+              key: namespace
+              from_attribute: k8s.namespace.name
+            - action: insert
+              key: loki.resource.labels
+              value: "namespace,cluster,service.name"
 
       exporters:
         prometheusremotewrite:
           endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+          resource_to_telemetry_conversion:
+            enabled: true
         loki:
           endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         otlp/datadog:

@@ -1,7 +1,8 @@
 # ----- Self-Healing Bridge: Alertmanager -> GitHub repository_dispatch -----
-# Quando um alerta dispara, o Alertmanager chama esta Function URL, que aciona
-# via repository_dispatch o workflow self-healing.yml no repositório de
-# aplicação (fiap-dac-toggle-master) — sem intervenção humana.
+# Quando um alerta dispara, o Alertmanager chama a URL do API Gateway abaixo,
+# que invoca a Lambda, que aciona via repository_dispatch o workflow
+# self-healing.yml no repositório de aplicação (fiap-dac-toggle-master) —
+# sem intervenção humana.
 
 data "archive_file" "self_healing_lambda" {
   type        = "zip"
@@ -9,27 +10,12 @@ data "archive_file" "self_healing_lambda" {
   output_path = "${path.module}/lambda/self-healing/main.zip"
 }
 
-resource "aws_iam_role" "self_healing_lambda" {
-  name = "togglemaster-self-healing-lambda"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "self_healing_lambda_logs" {
-  role       = aws_iam_role.self_healing_lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
+# Contas do AWS Academy (Learner Lab) não permitem iam:CreateRole /
+# iam:AttachRolePolicy — reaproveita a mesma "LabRole" já usada pelo
+# módulo EKS em main.tf (única role com permissão disponível na conta).
 resource "aws_lambda_function" "self_healing" {
   function_name    = "togglemaster-self-healing-bridge"
-  role             = aws_iam_role.self_healing_lambda.arn
+  role             = data.aws_iam_role.lab_role.arn
   handler          = "main.handler"
   runtime          = "python3.12"
   timeout          = 15
@@ -43,27 +29,29 @@ resource "aws_lambda_function" "self_healing" {
       WEBHOOK_TOKEN = var.self_healing_webhook_token
     }
   }
-
-  depends_on = [aws_iam_role_policy_attachment.self_healing_lambda_logs]
 }
 
-resource "aws_lambda_function_url" "self_healing" {
-  function_name      = aws_lambda_function.self_healing.function_name
-  authorization_type = "NONE"
+# A conta AWS Academy (Learner Lab) tem uma SCP que bloqueia invocação
+# anônima de Lambda Function URL (lambda:InvokeFunctionUrl) mesmo com
+# authorization_type = "NONE" e a resource policy correta — toda chamada
+# do Alertmanager recebia 403 Forbidden direto da AWS, antes até de chegar
+# no código da Lambda. Um API Gateway HTTP API na frente (que invoca via
+# lambda:InvokeFunction, uma ação diferente) contorna essa restrição.
+resource "aws_apigatewayv2_api" "self_healing" {
+  name          = "togglemaster-self-healing-api"
+  protocol_type = "HTTP"
+  target        = aws_lambda_function.self_healing.invoke_arn
 }
 
-# authorization_type = "NONE" só desabilita a exigência de assinatura IAM na
-# própria Function URL — sem esta permissão de recurso, qualquer chamada
-# (inclusive do Alertmanager) recebe 403 Forbidden.
-resource "aws_lambda_permission" "self_healing_url_public" {
-  statement_id           = "AllowPublicFunctionUrlInvoke"
-  action                 = "lambda:InvokeFunctionUrl"
-  function_name          = aws_lambda_function.self_healing.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+resource "aws_lambda_permission" "self_healing_apigw" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.self_healing.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.self_healing.execution_arn}/*/*"
 }
 
 output "self_healing_webhook_url" {
   description = "URL do bridge de self-healing (sem o token — ver var.self_healing_webhook_token)"
-  value       = aws_lambda_function_url.self_healing.function_url
+  value       = aws_apigatewayv2_api.self_healing.api_endpoint
 }
